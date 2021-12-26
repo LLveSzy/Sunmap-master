@@ -68,8 +68,8 @@ class BaseModel(ABC):
             self.load_networks(load_suffix)
         self.print_networks(opt.verbose)
 
-    def eval_net(self):
-        loss_dir = eval_net(self.model, self.dataset_val, self.device, self.dataset_val_size)
+    def eval_net(self, dataset_val, dataset_val_size):
+        loss_dir = eval_net(self.model, dataset_val, self.device, dataset_val_size)
         iou, t_iou = loss_dir['iou'], loss_dir['tiou']
         cldice, clacc, clrecall = loss_dir['cldice'], loss_dir['cl_acc'], loss_dir['cl_recall']
         junk_rat = loss_dir['junk_ratio']

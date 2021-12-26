@@ -11,7 +11,6 @@ from .base_model import BaseModel
 from torch.autograd import Variable
 
 
-
 class SemiSeg(BaseModel):
     def __init__(self, opt):
         BaseModel.__init__(self, opt)
@@ -36,11 +35,6 @@ class SemiSeg(BaseModel):
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=opt.lr, weight_decay=1e-4)
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'max',
                                                                         patience=20, factor=0.5, threshold=0.001)
-
-            self.opt.isTrain = False
-            self.dataset_val = create_dataset(self.opt)
-            self.dataset_val_size = len(self.dataset_val)
-            self.opt.isTrain = True
 
     def backward(self, pre, ema_pre, label):
         pre_soft = torch.sigmoid(pre)

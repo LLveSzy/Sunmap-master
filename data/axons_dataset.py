@@ -67,22 +67,12 @@ class AxonsDataset(data.Dataset):
                     label_rot = np.rot90(np.swapaxes(label_chunk, 0, 2), k=k_seed).swapaxes(2, 0)
 
                     data, annotation = callfunc[flip_seed]()
-
-                    # data_ori = data.copy()[np.newaxis, :, :, :]
                     data_ori = ((data - data.min()) / (data.max() - data.min()))[np.newaxis, :, :, :]
-                    # data_ori = equal(data, 0.9)[np.newaxis, :, :, :]
                     if in_channel != 1:
                         im = equal(gauss_cal(data), 0.1)
                         data[im < 0.1] = 0
                         data = equal(data, 0.9)
-
-                    # ----------- If Soft label ---------------#
-                    # annotation[annotation == 255] = 1
                     annotation[annotation > 0] = 1
-                    # annotation = annotation.astype(np.float32) / 255
-                    # --------------------------------------#
-
-                    # flg = int(round(random.random()))
                     if in_channel == 1:
                         data_final = data_ori
                     else:
@@ -151,8 +141,6 @@ class AxonsDataset(data.Dataset):
 
                         data, _ = callfunc[flip_seed]()
 
-                        # data_ori = data.copy()[np.newaxis, :, :, :]
-                        # data_ori = equal(data, 0.9)[np.newaxis, :, :, :]
                         if in_channel != 1:
                             im = equal(gauss_cal(data), 0.1)
                             data[im < 0.1] = 0
@@ -169,12 +157,8 @@ class AxonsDataset(data.Dataset):
                         # self.labels.append(annotation[np.newaxis, ...].astype(np.float32))
                         self.labels.append(np.zeros_like(data_final).astype(np.float32))
                         total_volumes += 1
-
                         pbar.update()
 
-        # dataset = np.array(self.datas)
-        # self.datas = list(equal(dataset, 0.9))
-        # print('max: %f, min: %f' % (dataset.max(), dataset.min()))
 
     def __getitem__(self, index):
         image = self.datas[index]

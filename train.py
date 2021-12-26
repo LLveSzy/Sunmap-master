@@ -9,6 +9,10 @@ if __name__ == '__main__':
     dataset_train = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
     dataset_train_size = len(dataset_train)    # get the number of images in the dataset.
     print('The number of training images = %d' % dataset_train_size)
+    opt.isTrain = False
+    dataset_val = create_dataset(opt)
+    dataset_val_size = len(dataset_val)
+    opt.isTrain = True
 
     model = create_model(opt)      # create a model given opt.model and other options
     total_iters = 0                # the total number of training iterations
@@ -29,6 +33,6 @@ if __name__ == '__main__':
 
                 pbar.update(data[0].shape[0])
                 pbar.set_postfix(**{'loss (batch)': format(model.loss.item(), '.5f')})
-        model.eval_net()
+        model.eval_net(dataset_val, dataset_val_size)
 
 
