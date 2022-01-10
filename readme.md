@@ -6,13 +6,13 @@ To evaluate cubes batch, the evaluating datasets directory must be like:
 
 └──dataroot
 
-​        └── val
+　　└── val
 
-​        ├──volumes
+　　　　├──volumes
 
-​        ├── labels
+　　　　├── labels
 
-​        └──artifacts
+　　　　└──artifacts
 
 ```shell
 python eval.py --dataroot </path/to/your/val-set/> --gpu_ids <0, 1, 2, 3,... gpu order> --net <axialunet | unet> --model evalnet --val_type cubes --pre_trained </path/to/your/pretrained/model.pth>
