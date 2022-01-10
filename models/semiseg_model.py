@@ -42,7 +42,7 @@ class SemiSeg(BaseModel):
         supervised_loss = self.criterion_BCE(pre[:self.opt.labeled_bs], label[:self.opt.labeled_bs])  # + \
         # 0.2 * (1 + soft_cldice_loss(torch.sigmoid(pre[:labeled_bs]), label[:labeled_bs]))
         consistency_loss = torch.mean((pre_soft[self.opt.labeled_bs:] - ema_soft) ** 2)
-        self.loss = supervised_loss + 0.7 * consistency_loss - 0.2 * (pre_soft * torch.log(pre_soft + 1e-9)).mean()
+        self.loss = supervised_loss + 0.7 * consistency_loss #- 0.2 * (pre_soft * torch.log(pre_soft + 1e-9)).mean()
         self.loss.backward()
 
     def forward(self, input):

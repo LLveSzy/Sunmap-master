@@ -106,21 +106,28 @@ class CustomDatasetDataLoader():
         dataset_class = find_dataset_using_name(opt.dataset_mode)
         self.dataset = dataset_class(opt)
         print("dataset [%s] was created" % type(self.dataset).__name__)
-        if opt.semi and opt.isTrain:
-            labeled_num = self.dataset.labeled_num
-            labeled_idxs = list(range(0, labeled_num))
-            unlabeled_idxs = list(range(labeled_num, len(self.dataset)))
-            batch_sampler = TwoStreamBatchSampler(
-                labeled_idxs, unlabeled_idxs, opt.batch_size, opt.batch_size - opt.labeled_bs)
-            self.dataloader = torch.utils.data.DataLoader(
-                self.dataset,
-                batch_sampler=batch_sampler,
-                num_workers=16)
+        if opt.isTrain:
+            if opt.semi:
+                labeled_num = self.dataset.labeled_num
+                labeled_idxs = list(range(0, labeled_num))
+                unlabeled_idxs = list(range(labeled_num, len(self.dataset)))
+                batch_sampler = TwoStreamBatchSampler(
+                    labeled_idxs, unlabeled_idxs, opt.batch_size, opt.batch_size - opt.labeled_bs)
+                self.dataloader = torch.utils.data.DataLoader(
+                    self.dataset,
+                    batch_sampler=batch_sampler,
+                    num_workers=16)
+            else:
+                self.dataloader = torch.utils.data.DataLoader(
+                    self.dataset,
+                    batch_size=opt.batch_size,
+                    shuffle=opt.shuffle,
+                    num_workers=16)
         else:
             self.dataloader = torch.utils.data.DataLoader(
                 self.dataset,
                 batch_size=opt.batch_size,
-                shuffle=opt.shuffle,
+                shuffle=opt.shuffle_val,
                 num_workers=16)
 
     def load_data(self):

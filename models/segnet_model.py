@@ -31,12 +31,11 @@ class SegNet(BaseModel):
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'max',
                                                                         patience=12, factor=0.5, threshold=0.001)
 
-            self.opt.isTrain = False
-            self.dataset_val = create_dataset(self.opt)
-            self.dataset_val_size = len(self.dataset_val)
-            self.opt.isTrain = True
-
     def backward(self, pre, label):
+        # junks = label.view(label.shape[0], label.shape[1], -1).sum(axis=2)
+        # junks = junks.view(pre.shape[0], pre.shape[1], 1, 1, 1).expand(pre.shape)
+        # rect_label = (torch.sigmoid(pre) >= 0.80)
+        # label = (label + rect_label - label * rect_label) * (junks != 0)
         self.loss = self.criterion_BCE(pre, label)
         self.loss.backward()
 

@@ -1,8 +1,11 @@
 import torch
 import tifffile
+from utils import *
 from tqdm import tqdm
 from models.losses import *
+from models import create_model
 from torch.autograd import Variable
+from options.val_options import ValOptions
 
 
 def eval_net(model, testloader, device, n_val):
@@ -47,3 +50,16 @@ def eval_net(model, testloader, device, n_val):
             'tiou': total_loss_tiou / global_steps,
             'junk_ratio': junk_rat / global_steps,
             'cldice': (2. * cl_recall_mean * cl_acc_mean) / (cl_recall_mean + cl_acc_mean)}
+
+
+if __name__ == '__main__':
+    opt = ValOptions().parse()
+    model = create_model(opt)
+    val_type = opt.val_type
+    if val_type == 'volumes2':
+        model.eval_two_volumes_maxpool()
+    elif val_type == 'cubes':
+        model.eval_volumes_batch()
+
+
+

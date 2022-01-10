@@ -1,10 +1,11 @@
 import os
 import time
 import torch
-from eval import eval_net
+from . import networks
 from collections import OrderedDict
 from abc import ABC, abstractmethod
-from . import networks
+from models.evalnet_model import EvalNet
+
 
 
 class BaseModel(ABC):
@@ -69,7 +70,7 @@ class BaseModel(ABC):
         self.print_networks(opt.verbose)
 
     def eval_net(self, dataset_val, dataset_val_size):
-        loss_dir = eval_net(self.model, dataset_val, self.device, dataset_val_size)
+        loss_dir = EvalNet.eval_net(self.model, dataset_val, self.device, dataset_val_size)
         iou, t_iou = loss_dir['iou'], loss_dir['tiou']
         cldice, clacc, clrecall = loss_dir['cldice'], loss_dir['cl_acc'], loss_dir['cl_recall']
         junk_rat = loss_dir['junk_ratio']
@@ -77,9 +78,9 @@ class BaseModel(ABC):
               '\n ClDice: {} \n ClAcc: {} \n ClRecall: {}'
               '\n Junk-ratio: {}'
               .format(iou, t_iou, cldice, clacc, clrecall, junk_rat, '.8f'))
-        if cldice + iou + t_iou > self.metric:
+        if cldice + iou + t_iou - junk_rat > self.metric:
             self.save_checkpoint()
-            self.metric = cldice + iou + t_iou
+            self.metric = cldice + iou + t_iou - junk_rat
         self.scheduler.step(self.metric)
 
     def test(self):

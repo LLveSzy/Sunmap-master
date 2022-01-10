@@ -1,4 +1,5 @@
 import torch
+import logging
 import torch.nn as nn
 from torch.nn import init
 from axial_attention import AxialAttention, AxialPositionalEmbedding
@@ -66,13 +67,21 @@ def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=[]):
 
 
 def load_my_state_dict(model, state_dict):
+    not_match = 0
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
+    logger = logging.getLogger(__name__)
     own_state = model.state_dict()
     for name, param in state_dict.items():
         if name not in own_state:
+            not_match += 1
             continue
         if isinstance(param, nn.Parameter):
             param = param.data
         own_state[name].copy_(param)
+    if not_match != 0:
+        logger.warning('Params not match: ' + str(not_match))
+    else:
+        logger.info('ALL MATCHED.')
     return own_state
 
 
