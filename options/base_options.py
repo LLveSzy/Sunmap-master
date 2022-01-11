@@ -19,7 +19,7 @@ class BaseOptions():
     def initialize(self, parser):
         """Define the common options that are used in both training and test."""
         # basic parameters
-        parser.add_argument('--dataroot', required=True, help='path to volumes (should have subfolders [volumes, labels, labels_sk, nonlabel(if using semi-supervising)]')
+        parser.add_argument('--dataroot', type=str, default='', help='path to volumes (should have subfolders [volumes, labels, labels_sk, nonlabel(if using semi-supervising)]')
         parser.add_argument('-n', '--name', type=str, default='Sunmap', dest='name', help='name of model')
         parser.add_argument('-s', '--is_save', type=bool, default=True, dest='is_save', help='save checkpoints')
         parser.add_argument('--gpu_ids', type=str, default='0', help='cuda number')

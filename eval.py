@@ -4,6 +4,7 @@ from utils import *
 from tqdm import tqdm
 from models.losses import *
 from models import create_model
+from multiprocessing import Pool
 from torch.autograd import Variable
 from options.val_options import ValOptions
 
@@ -60,6 +61,11 @@ if __name__ == '__main__':
         model.eval_two_volumes_maxpool()
     elif val_type == 'cubes':
         model.eval_volumes_batch()
-
+    elif val_type == 'segment':
+        imgs = model.test_3D_volume()
+        pool = Pool(processes=3)
+        pool.map(model.segment_brain_batch, imgs)
+        pool.close()
+        pool.join()
 
 

@@ -1,17 +1,23 @@
 import torch
+import shutil
 import tifffile
+import multiprocessing
+import configparser
 from utils import *
+from PIL import Image
 from tqdm import tqdm
 from . import networks
 from models.losses import *
 from data import create_dataset
 from torch.autograd import Variable
+from torch.utils.data import DataLoader
 
 
 class EvalNet:
     def __init__(self, opt):
         self.opt = opt
         self.gpu_ids = opt.gpu_ids
+        self.input_dim = self.opt.input_dim
         self.device = torch.device('cuda:{}'.format(opt.gpu_ids[0])) if opt.gpu_ids else torch.device('cpu')
 
 
@@ -38,15 +44,18 @@ class EvalNet:
               '\n ClDice: {} \n ClAcc: {} \n ClRecall: {} \n Dice-score: {}'
               .format(total_loss_iou, total_loss_tiou, cldice, acc, recall, dice_score, '.8f'))
 
-    def eval_volumes_batch(self):
-        model = networks.define_net(self.opt.input_nc, self.opt.output_nc, self.opt.net, gpu_ids=self.gpu_ids)
+    def get_model(self):
+        self.model = networks.define_net(self.opt.input_nc, self.opt.output_nc, self.opt.net, gpu_ids=self.gpu_ids)
         if self.opt.pre_trained:
             pretrain_encoder = torch.load(self.opt.pre_trained, map_location=self.device)
-            model.load_state_dict(networks.load_my_state_dict(model, pretrain_encoder))
+            self.model.load_state_dict(networks.load_my_state_dict(self.model, pretrain_encoder))
             print(f'loaded: {self.opt.pre_trained}')
+
+    def eval_volumes_batch(self):
+        self.get_model()
         testLoader = create_dataset(self.opt)
         n_val = len(testLoader)
-        loss_dir = self.eval_net(model, testLoader, self.device, n_val)
+        loss_dir = self.eval_net(self.model, testLoader, self.device, n_val)
         iou, t_iou = loss_dir['iou'], loss_dir['tiou']
         cldice, clacc, clrecall = loss_dir['cldice'], loss_dir['cl_acc'], loss_dir['cl_recall']
         junk_rat = loss_dir['junk_ratio']
@@ -54,6 +63,90 @@ class EvalNet:
               '\n ClDice: {} \n ClAcc: {} \n ClRecall: {}'
               '\n Junk-ratio: {}'
               .format(iou, t_iou, cldice, clacc, clrecall, junk_rat, '.8f'))
+
+    def test_3D_volume(self):
+        self.get_model()
+        multiprocessing.set_start_method('spawn')
+        config = configparser.ConfigParser()
+        config.read("segpoints.ini", encoding="utf-8")
+        volume_section = self.opt.section
+        dataroot = config.get(volume_section, "dataroot")
+        self.target = os.path.join('./segmentations', self.opt.exp)
+        if os.path.exists(self.target):
+            shutil.rmtree(self.target)
+        os.mkdir(self.target)
+        self.overlap = self.opt.overlap
+        self.cube = self.input_dim - self.opt.overlap * 2
+        self.files = [os.path.join(dataroot, pth) for pth in sorted(os.listdir(dataroot))]
+        shape_y, shape_x = np.array(Image.open(self.files[0])).shape
+        self.s_x, self.s_y, self.s_z = [int(i) for i in config.get(volume_section, "start_point").split(',')]
+        self.e_x, self.e_y, self.e_z = [int(i) for i in config.get(volume_section, "end_point").split(',')]
+        assert 0 <= self.s_x and self.e_x < shape_x and 0 <= self.s_y and self.e_y < shape_y
+
+        self.begin_x, self.begin_y = max(0, self.s_x - self.overlap), max(0, self.s_y - self.overlap)
+        self.end_x, self.end_y = min(shape_x, self.e_x + self.overlap), min(shape_y, self.e_y + self.overlap)
+
+        self.pad_s_x = self.begin_x - self.s_x + self.overlap
+        self.pad_s_y = self.begin_y - self.s_y + self.overlap
+        self.pad_e_x = self.e_x + self.overlap - self.end_x
+        self.pad_e_y = self.e_y + self.overlap - self.end_y
+        assert self.s_x - self.e_x < self.cube and self.s_y - self.e_y < self.cube and self.s_z - self.e_z < self.cube
+
+        return [z for z in range(self.s_z + self.cube, self.e_z - self.cube, self.cube)] + [int(self.e_z) - self.cube]
+
+    def segment_brain_batch(self, z):
+        volume = []
+        for i in range(z - self.overlap, z + self.cube + self.overlap):
+            if 0 <= i < len(self.files):
+                img = np.array(Image.open(self.files[i])).astype(np.float32)[self.begin_y: self.end_y, self.begin_x: self.end_x]
+                volume.append(np.pad(img, ((self.pad_s_y, self.pad_e_y), (self.pad_s_x, self.pad_e_x)), 'edge'))
+            else:
+                blank = np.zeros_like((self.e_y - self.s_y + self.pad_s_y + self.pad_e_y,
+                                       self.e_x - self.s_x + self.pad_s_x + self.pad_e_x))
+                volume.append(blank)
+        volume = np.array(volume)
+        seg_res = np.zeros_like(volume)
+        shape_y, shape_x = volume.shape[1:]
+        seg = []
+        overlap = self.overlap
+        cube = self.cube
+        for y in range(overlap, shape_y - self.input_dim, cube):
+            for x in range(overlap, shape_x - self.input_dim, cube):
+                v = volume[:, y - overlap: y - overlap + self.input_dim, x - overlap: x - overlap + self.input_dim]
+                seg.append(v[np.newaxis, ...])
+                if x + self.input_dim >= shape_x:
+                    seg.append(volume[:, y - overlap: y - overlap + self.input_dim, shape_x - self.input_dim: shape_x][np.newaxis, ...])
+            seg.append(volume[:, shape_y - self.input_dim: shape_y, x - overlap: x - overlap + self.input_dim][np.newaxis, ...])
+        seg_sets = DataLoader(seg, batch_size=self.opt.batch_size, shuffle=False)
+        segments = []
+        for datas in seg_sets:
+            pred = self.model(datas.to(self.device))
+            pred = torch.sigmoid(pred)
+            pred = pred.reshape(-1, self.input_dim, self.input_dim, self.input_dim).detach().cpu().numpy() * 255
+            pred = pred[:, overlap: overlap + cube, overlap: overlap + cube, overlap: overlap + cube]
+            if len(segments) == 0:
+                segments = pred
+            else:
+                segments = np.concatenate((segments, pred), axis=0)
+        i = 0
+        for y in range(overlap, shape_y - self.input_dim, cube):
+            for x in range(overlap, shape_x - self.input_dim, cube):
+                seg_res[overlap: self.input_dim - overlap, y - overlap: y - overlap + cube,
+                        x - overlap: x - overlap + cube] = segments[i]
+                i += 1
+                if x + self.input_dim >= shape_x:
+                    seg_res[overlap: self.input_dim - overlap, shape_y - overlap: y - overlap + cube,
+                            shape_x - cube - overlap: shape_x - overlap] = segments[i]
+                    i += 1
+            seg_res[overlap: self.input_dim - overlap, shape_y - overlap - cube: shape_y - overlap,
+                    x - overlap: x - overlap + cube] = segments[i]
+            i += 1
+        i = z
+        for img in seg_res:
+            tifffile.imsave(os.path.join(self.target, str(i).zfill(4) + '.tiff'), img)
+            i += 1
+
+        print(self.files[z], z, volume.shape)
 
     @staticmethod
     def eval_net(model, testloader, device, n_val):
@@ -111,7 +204,6 @@ class EvalNet:
         parser.set_defaults(semi='False')
         val_type = parser.parse_known_args()[0].val_type
         if val_type == 'cubes':
-            parser.add_argument('--net', type=str, help='unet | axialunet')
             parser.add_argument('--batch_size', type=int, default=10, help='batch size')
             parser.add_argument('--n_samples', type=int, default=4, help='crop n volumes from one cube')
             parser.add_argument('--artifacts', type=bool, default=True, help='train with artifacts volumes')
@@ -120,5 +212,12 @@ class EvalNet:
         elif val_type == 'volumes2':
             parser.add_argument('--data_target', type=str, help='target volume for evaluating')
             parser.add_argument('--pool_kernel', type=int, default=5, help='maxpooling kernel size')
+        elif val_type == 'segment':
+            parser.add_argument('--net', type=str, help='unet | axialunet')
+            parser.add_argument('--overlap', type=int, default=24, help='overlap size during the prediction')
+            parser.add_argument('--section', type=str, help='section for model prediction')
+            parser.add_argument('--batch_size', type=int, default=10, help='batch size')
+            parser.add_argument('--pre_trained', type=str, default=None, help='pre-trained model')
+            parser.add_argument('--exp', type=str, default=None, help='experiment name')
 
         return parser

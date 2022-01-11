@@ -6,7 +6,7 @@ In order to run the Sun-map correctly, you should prepare your dataset directory
 
 ```
 └──dataroot *(your dataroot path)*
-　　└── train
+　　├── train
 　　│　　├──volumes
 　　│　　│　　└──volume-001.tiff
 　　│　　├── labels
