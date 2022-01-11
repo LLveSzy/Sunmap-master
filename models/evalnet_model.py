@@ -50,6 +50,7 @@ class EvalNet:
             pretrain_encoder = torch.load(self.opt.pre_trained, map_location=self.device)
             self.model.load_state_dict(networks.load_my_state_dict(self.model, pretrain_encoder))
             print(f'loaded: {self.opt.pre_trained}')
+        self.model.eval()
 
     def eval_volumes_batch(self):
         self.get_model()
@@ -92,7 +93,7 @@ class EvalNet:
         self.pad_e_y = self.e_y + self.overlap - self.end_y
         assert self.s_x - self.e_x < self.cube and self.s_y - self.e_y < self.cube and self.s_z - self.e_z < self.cube
 
-        return [z for z in range(self.s_z + self.cube, self.e_z - self.cube, self.cube)] + [int(self.e_z) - self.cube]
+        return [z for z in range(self.s_z, self.e_z - self.cube, self.cube)] + [int(self.e_z) - self.cube]
 
     def segment_brain_batch(self, z):
         volume = []
@@ -113,17 +114,28 @@ class EvalNet:
         for y in range(overlap, shape_y - self.input_dim, cube):
             for x in range(overlap, shape_x - self.input_dim, cube):
                 v = volume[:, y - overlap: y - overlap + self.input_dim, x - overlap: x - overlap + self.input_dim]
+                v = equal(v)
                 seg.append(v[np.newaxis, ...])
-                if x + self.input_dim >= shape_x:
-                    seg.append(volume[:, y - overlap: y - overlap + self.input_dim, shape_x - self.input_dim: shape_x][np.newaxis, ...])
-            seg.append(volume[:, shape_y - self.input_dim: shape_y, x - overlap: x - overlap + self.input_dim][np.newaxis, ...])
+                if x + cube >= shape_x - self.input_dim and y + cube >= shape_y - self.input_dim:
+                    v = volume[:, shape_y - self.input_dim: shape_y, shape_x - self.input_dim: shape_x][np.newaxis, ...]
+                    v = equal(v)
+                    seg.append(v)
+                elif x + cube >= shape_x - self.input_dim:
+                    v = volume[:, y - overlap: y - overlap + self.input_dim, shape_x - self.input_dim: shape_x][np.newaxis, ...]
+                    v = equal(v)
+                    seg.append(v)
+                elif y + cube >= shape_y - self.input_dim:
+                    v = volume[:, shape_y - self.input_dim: shape_y, x - overlap: x - overlap + self.input_dim][np.newaxis, ...]
+                    v = equal(v)
+                    seg.append(v)
+
         seg_sets = DataLoader(seg, batch_size=self.opt.batch_size, shuffle=False)
         segments = []
         for datas in seg_sets:
             pred = self.model(datas.to(self.device))
             pred = torch.sigmoid(pred)
-            pred = pred.reshape(-1, self.input_dim, self.input_dim, self.input_dim).detach().cpu().numpy() * 255
-            pred = pred[:, overlap: overlap + cube, overlap: overlap + cube, overlap: overlap + cube]
+            pred = pred.reshape(-1, self.input_dim, self.input_dim, self.input_dim).detach().cpu().numpy()
+            pred = pred[:, overlap: overlap + cube, overlap: overlap + cube, overlap: overlap + cube] * 255
             if len(segments) == 0:
                 segments = pred
             else:
@@ -131,22 +143,27 @@ class EvalNet:
         i = 0
         for y in range(overlap, shape_y - self.input_dim, cube):
             for x in range(overlap, shape_x - self.input_dim, cube):
-                seg_res[overlap: self.input_dim - overlap, y - overlap: y - overlap + cube,
-                        x - overlap: x - overlap + cube] = segments[i]
+                seg_res[overlap: self.input_dim - overlap, y: y + cube,
+                        x: x + cube] = segments[i]
                 i += 1
-                if x + self.input_dim >= shape_x:
-                    seg_res[overlap: self.input_dim - overlap, shape_y - overlap: y - overlap + cube,
+                if x + cube >= shape_x - self.input_dim and y + cube >= shape_y - self.input_dim:
+                    seg_res[overlap: self.input_dim - overlap, shape_y - overlap - cube: shape_y - overlap,
                             shape_x - cube - overlap: shape_x - overlap] = segments[i]
                     i += 1
-            seg_res[overlap: self.input_dim - overlap, shape_y - overlap - cube: shape_y - overlap,
-                    x - overlap: x - overlap + cube] = segments[i]
-            i += 1
+                elif x + cube >= shape_x - self.input_dim:
+                    seg_res[overlap: self.input_dim - overlap, y: y + cube,
+                            shape_x - cube - overlap: shape_x - overlap] = segments[i]
+                    i += 1
+                elif y + cube >= shape_y - self.input_dim:
+                    seg_res[overlap: self.input_dim - overlap,
+                            shape_y - overlap - cube: shape_y - overlap, x: x + cube] = segments[i]
+                    i += 1
         i = z
-        for img in seg_res:
-            tifffile.imsave(os.path.join(self.target, str(i).zfill(4) + '.tiff'), img)
+        for img in seg_res[overlap: self.input_dim - overlap, overlap: shape_y - overlap, overlap: shape_x - overlap]:
+            tifffile.imsave(os.path.join(self.target, str(i).zfill(4) + '.tiff'), img.astype(np.uint8))
             i += 1
 
-        print(self.files[z], z, volume.shape)
+        print(z)
 
     @staticmethod
     def eval_net(model, testloader, device, n_val):
