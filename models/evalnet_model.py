@@ -82,15 +82,16 @@ class EvalNet:
         shape_y, shape_x = np.array(Image.open(self.files[0])).shape
         self.s_x, self.s_y, self.s_z = [int(i) for i in config.get(volume_section, "start_point").split(',')]
         self.e_x, self.e_y, self.e_z = [int(i) for i in config.get(volume_section, "end_point").split(',')]
+
         assert 0 <= self.s_x and self.e_x < shape_x and 0 <= self.s_y and self.e_y < shape_y
 
         self.begin_x, self.begin_y = max(0, self.s_x - self.overlap), max(0, self.s_y - self.overlap)
         self.end_x, self.end_y = min(shape_x, self.e_x + self.overlap), min(shape_y, self.e_y + self.overlap)
-
         self.pad_s_x = self.begin_x - self.s_x + self.overlap
         self.pad_s_y = self.begin_y - self.s_y + self.overlap
         self.pad_e_x = self.e_x + self.overlap - self.end_x
         self.pad_e_y = self.e_y + self.overlap - self.end_y
+
         assert self.s_x - self.e_x < self.cube and self.s_y - self.e_y < self.cube and self.s_z - self.e_z < self.cube
 
         return [z for z in range(self.s_z, self.e_z - self.cube, self.cube)] + [int(self.e_z) - self.cube]
@@ -118,16 +119,14 @@ class EvalNet:
                 seg.append(v[np.newaxis, ...])
                 if x + cube >= shape_x - self.input_dim and y + cube >= shape_y - self.input_dim:
                     v = volume[:, shape_y - self.input_dim: shape_y, shape_x - self.input_dim: shape_x][np.newaxis, ...]
-                    v = equal(v)
-                    seg.append(v)
+                    seg.append(equal(v))
                 elif x + cube >= shape_x - self.input_dim:
                     v = volume[:, y - overlap: y - overlap + self.input_dim, shape_x - self.input_dim: shape_x][np.newaxis, ...]
-                    v = equal(v)
-                    seg.append(v)
+                    seg.append(equal(v))
                 elif y + cube >= shape_y - self.input_dim:
                     v = volume[:, shape_y - self.input_dim: shape_y, x - overlap: x - overlap + self.input_dim][np.newaxis, ...]
-                    v = equal(v)
-                    seg.append(v)
+
+                    seg.append(equal(v))
 
         seg_sets = DataLoader(seg, batch_size=self.opt.batch_size, shuffle=False)
         segments = []
@@ -143,20 +142,16 @@ class EvalNet:
         i = 0
         for y in range(overlap, shape_y - self.input_dim, cube):
             for x in range(overlap, shape_x - self.input_dim, cube):
-                seg_res[overlap: self.input_dim - overlap, y: y + cube,
-                        x: x + cube] = segments[i]
+                seg_res[overlap: self.input_dim - overlap, y: y + cube, x: x + cube] = segments[i]
                 i += 1
                 if x + cube >= shape_x - self.input_dim and y + cube >= shape_y - self.input_dim:
-                    seg_res[overlap: self.input_dim - overlap, shape_y - overlap - cube: shape_y - overlap,
-                            shape_x - cube - overlap: shape_x - overlap] = segments[i]
+                    seg_res[overlap: self.input_dim - overlap, shape_y - overlap - cube: shape_y - overlap, shape_x - cube - overlap: shape_x - overlap] = segments[i]
                     i += 1
                 elif x + cube >= shape_x - self.input_dim:
-                    seg_res[overlap: self.input_dim - overlap, y: y + cube,
-                            shape_x - cube - overlap: shape_x - overlap] = segments[i]
+                    seg_res[overlap: self.input_dim - overlap, y: y + cube, shape_x - cube - overlap: shape_x - overlap] = segments[i]
                     i += 1
                 elif y + cube >= shape_y - self.input_dim:
-                    seg_res[overlap: self.input_dim - overlap,
-                            shape_y - overlap - cube: shape_y - overlap, x: x + cube] = segments[i]
+                    seg_res[overlap: self.input_dim - overlap, shape_y - overlap - cube: shape_y - overlap, x: x + cube] = segments[i]
                     i += 1
         i = z
         for img in seg_res[overlap: self.input_dim - overlap, overlap: shape_y - overlap, overlap: shape_x - overlap]:
