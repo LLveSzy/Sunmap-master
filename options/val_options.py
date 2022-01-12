@@ -11,6 +11,6 @@ class ValOptions(BaseOptions):
         parser = BaseOptions.initialize(self, parser)
         parser.add_argument('--val_type', type=str, help='volumes2 | cubes ')
         parser.add_argument('--threshold', type=str, default=125, help='probability threshold of the positive class')
-
+        parser.set_defaults(model='evalnet')
         self.isTrain = False
         return parser

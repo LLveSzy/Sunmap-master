@@ -84,6 +84,7 @@ class EvalNet:
         self.e_x, self.e_y, self.e_z = [int(i) for i in config.get(volume_section, "end_point").split(',')]
 
         assert 0 <= self.s_x and self.e_x < shape_x and 0 <= self.s_y and self.e_y < shape_y
+        assert self.s_x < self.e_x and self.s_y < self.e_y and self.s_z < self.e_z
 
         self.begin_x, self.begin_y = max(0, self.s_x - self.overlap), max(0, self.s_y - self.overlap)
         self.end_x, self.end_y = min(shape_x, self.e_x + self.overlap), min(shape_y, self.e_y + self.overlap)
@@ -112,20 +113,19 @@ class EvalNet:
         seg = []
         overlap = self.overlap
         cube = self.cube
-        for y in range(overlap, shape_y - self.input_dim, cube):
-            for x in range(overlap, shape_x - self.input_dim, cube):
+        for y in range(overlap, shape_y - cube, cube):
+            for x in range(overlap, shape_x - cube, cube):
                 v = volume[:, y - overlap: y - overlap + self.input_dim, x - overlap: x - overlap + self.input_dim]
                 v = equal(v)
                 seg.append(v[np.newaxis, ...])
-                if x + cube >= shape_x - self.input_dim and y + cube >= shape_y - self.input_dim:
+                if x + 2 * cube >= shape_x and y + 2 * cube >= shape_y:
                     v = volume[:, shape_y - self.input_dim: shape_y, shape_x - self.input_dim: shape_x][np.newaxis, ...]
                     seg.append(equal(v))
-                elif x + cube >= shape_x - self.input_dim:
-                    v = volume[:, y - overlap: y - overlap + self.input_dim, shape_x - self.input_dim: shape_x][np.newaxis, ...]
+                elif x + 2 * cube >= shape_x:
+                    v = volume[:, y - overlap: y + overlap + cube, shape_x - self.input_dim: shape_x][np.newaxis, ...]
                     seg.append(equal(v))
-                elif y + cube >= shape_y - self.input_dim:
-                    v = volume[:, shape_y - self.input_dim: shape_y, x - overlap: x - overlap + self.input_dim][np.newaxis, ...]
-
+                elif y + 2 * cube >= shape_y:
+                    v = volume[:, shape_y - self.input_dim: shape_y, x - overlap: x + overlap + cube][np.newaxis, ...]
                     seg.append(equal(v))
 
         seg_sets = DataLoader(seg, batch_size=self.opt.batch_size, shuffle=False)
@@ -140,17 +140,17 @@ class EvalNet:
             else:
                 segments = np.concatenate((segments, pred), axis=0)
         i = 0
-        for y in range(overlap, shape_y - self.input_dim, cube):
-            for x in range(overlap, shape_x - self.input_dim, cube):
+        for y in range(overlap, shape_y - cube, cube):
+            for x in range(overlap, shape_x - cube, cube):
                 seg_res[overlap: self.input_dim - overlap, y: y + cube, x: x + cube] = segments[i]
                 i += 1
-                if x + cube >= shape_x - self.input_dim and y + cube >= shape_y - self.input_dim:
+                if x + 2 * cube >= shape_x and y + 2 * cube >= shape_y:
                     seg_res[overlap: self.input_dim - overlap, shape_y - overlap - cube: shape_y - overlap, shape_x - cube - overlap: shape_x - overlap] = segments[i]
                     i += 1
-                elif x + cube >= shape_x - self.input_dim:
+                elif x + 2 * cube >= shape_x:
                     seg_res[overlap: self.input_dim - overlap, y: y + cube, shape_x - cube - overlap: shape_x - overlap] = segments[i]
                     i += 1
-                elif y + cube >= shape_y - self.input_dim:
+                elif y + 2 * cube >= shape_y:
                     seg_res[overlap: self.input_dim - overlap, shape_y - overlap - cube: shape_y - overlap, x: x + cube] = segments[i]
                     i += 1
         i = z
@@ -230,6 +230,7 @@ class EvalNet:
             parser.add_argument('--section', type=str, help='section for model prediction')
             parser.add_argument('--batch_size', type=int, default=10, help='batch size')
             parser.add_argument('--pre_trained', type=str, default=None, help='pre-trained model')
-            parser.add_argument('--exp', type=str, default=None, help='experiment name')
+            parser.add_argument('--exp', type=str, required=True, help='experiment name')
+            parser.add_argument('--process', type=int, default=2, help='processes number')
 
         return parser

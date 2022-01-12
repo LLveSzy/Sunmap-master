@@ -63,7 +63,7 @@ if __name__ == '__main__':
         model.eval_volumes_batch()
     elif val_type == 'segment':
         imgs = model.test_3D_volume()
-        pool = Pool(processes=3)
+        pool = Pool(processes=model.opt.process)
         pool.map(model.segment_brain_batch, imgs)
         pool.close()
         pool.join()
