@@ -57,7 +57,7 @@ def random_weaken_contrast(im, mid_points, rad, sigma):
     return im
 
 
-def contrast_augmentation(volume, label, rad=25, N=10, sigma=0.65):
+def contrast_augmentation(volume, label, rad=25, N=5, sigma=0.65):
     # raw = volume.copy()
     center_cube = label[rad: -rad, rad: -rad, rad: -rad]
     zxis, xxis, yxis = np.where(center_cube == 255)

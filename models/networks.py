@@ -411,7 +411,10 @@ class AxialUNet(nn.Module):
                                                    heads=4,
                                                    dim_index=2,
                                                    num_dimensions=3)
-
+        self.axial_attention_down_2 = AxialAttention(dim=64,
+                                                   heads=4,
+                                                   dim_index=2,
+                                                   num_dimensions=3)
 
     def conv_norm_lrelu(self, feat_in, feat_out):
         return nn.Sequential(
@@ -459,6 +462,7 @@ class AxialUNet(nn.Module):
         out = self.conv3d_c2(out)
         residual_2 = out
         out = self.norm_lrelu_conv_c2(out)
+        self.axial_attention_down_2(out)
         out = self.dropout3d(out)
         out = self.norm_lrelu_conv_c2(out)
         out += residual_2

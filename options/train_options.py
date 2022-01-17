@@ -17,7 +17,7 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--n_samples', type=int, default=4, help='crop n volumes from one cube')
         parser.add_argument('--semi', type=bool, default=False, help='train with semi-supervised methods')
         parser.add_argument('--shuffle', type=bool, default=True, help='whether to shuffle the data')
-        parser.add_argument('--shuffle_val', type=bool, default=False, help='whether to shuffle the val data')
+        parser.add_argument('--shuffle_val', type=bool, default=True, help='whether to shuffle the val data')
         parser.add_argument('--exp', type=str, default='Sunmap', help='name of the experiment')
         parser.add_argument('--checkpoint_name', type=str, help='name of the experiment')
         parser.add_argument('--net', type=str, help='unet | axialunet')

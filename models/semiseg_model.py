@@ -4,9 +4,7 @@ import torch
 import logging
 import torch.nn as nn
 from . import networks
-from eval import eval_net
 from utils import torch_fliplr
-from data import create_dataset
 from .base_model import BaseModel
 from torch.autograd import Variable
 

@@ -57,7 +57,7 @@ class AxonsDataset(data.Dataset):
                     volume_chunk = volume[z:z + input_dim, x:x + input_dim, y:y + input_dim].copy()
                     label_chunk = label[z:z + input_dim, x:x + input_dim, y:y + input_dim].copy()
                     if random.randint(0, 1) == 0:
-                        volume_chunk = contrast_augmentation(volume_chunk, label_chunk, rad=8, N=3)
+                        volume_chunk = contrast_augmentation(volume_chunk, label_chunk, rad=15, N=3)
 
                     k_seed = random.randint(0, 3)
                     flip_seed = random.randint(0, 1)
@@ -74,7 +74,7 @@ class AxonsDataset(data.Dataset):
 
                     total_volumes += 1
                     pbar.update()
-
+            total_volumes_axon = total_volumes
             if data_mix:
                 artifacts_folder_path = data_path + '/artifacts/'
                 artifacts_path = get_dir(artifacts_folder_path)
@@ -86,7 +86,7 @@ class AxonsDataset(data.Dataset):
                                 or artifact.shape[2] < opt.input_dim:
                             print(artifact.shape)
                             continue
-                        for _ in range(max(1, int(len(volumes_path) / len(artifacts_path) * n_samples * 0.7))):
+                        for _ in range(max(1, int(len(volumes_path) / len(artifacts_path) * n_samples))):
                             z = random.randint(0, artifact.shape[0] - input_dim)
                             x = random.randint(0, artifact.shape[1] - input_dim)
                             y = random.randint(0, artifact.shape[2] - input_dim)
@@ -95,7 +95,14 @@ class AxonsDataset(data.Dataset):
                             # artifact = equal(artifact, 0.9)
                             artifact = (artifact - artifact.min()) / (artifact.max() - artifact.min())
                             data_ori = artifact.copy()[np.newaxis, :, :, :]
-                            annotation[annotation > 0] = 0
+                            if random.randint(0, 1) == 0:
+                                mix_seed = random.random() * 0.2 + 0.4  # from 0.4 to 0.6
+                                idx = random.randint(0, total_volumes_axon - 1)
+                                data_axon = self.datas[idx]
+                                data_ori = (data_ori * mix_seed + data_axon * (1 - mix_seed))
+                                annotation = self.labels[idx][0]
+                            else:
+                                annotation[annotation > 0] = 0
                             self.datas.append(data_ori.astype(np.float32))
                             self.labels.append(annotation[np.newaxis, ...].astype(np.float32))
 

@@ -102,29 +102,30 @@ class EvalNet:
         for i in range(z - self.overlap, z + self.cube + self.overlap):
             if 0 <= i < len(self.files):
                 img = np.array(Image.open(self.files[i])).astype(np.float32)[self.begin_y: self.end_y, self.begin_x: self.end_x]
-                volume.append(np.pad(img, ((self.pad_s_y, self.pad_e_y), (self.pad_s_x, self.pad_e_x)), 'edge'))
+                img = np.pad(img, ((self.pad_s_y, self.pad_e_y), (self.pad_s_x, self.pad_e_x)), 'edge')
+                volume.append(img)
             else:
-                blank = np.zeros_like((self.e_y - self.s_y + self.pad_s_y + self.pad_e_y,
+                blank = np.zeros((self.e_y - self.s_y + self.pad_s_y + self.pad_e_y,
                                        self.e_x - self.s_x + self.pad_s_x + self.pad_e_x))
                 volume.append(blank)
-        volume = np.array(volume)
+        volume = np.array(volume).astype(np.float32)
         seg_res = np.zeros_like(volume)
         shape_y, shape_x = volume.shape[1:]
         seg = []
         overlap = self.overlap
         cube = self.cube
-        for y in range(overlap, shape_y - cube, cube):
-            for x in range(overlap, shape_x - cube, cube):
+        for y in range(overlap, shape_y - cube - overlap, cube):
+            for x in range(overlap, shape_x - cube - overlap, cube):
                 v = volume[:, y - overlap: y - overlap + self.input_dim, x - overlap: x - overlap + self.input_dim]
                 v = equal(v)
                 seg.append(v[np.newaxis, ...])
-                if x + 2 * cube >= shape_x and y + 2 * cube >= shape_y:
+                if x + 2 * cube + overlap >= shape_x and y + 2 * cube >= shape_y:
                     v = volume[:, shape_y - self.input_dim: shape_y, shape_x - self.input_dim: shape_x][np.newaxis, ...]
                     seg.append(equal(v))
-                elif x + 2 * cube >= shape_x:
+                elif x + 2 * cube + overlap >= shape_x:
                     v = volume[:, y - overlap: y + overlap + cube, shape_x - self.input_dim: shape_x][np.newaxis, ...]
                     seg.append(equal(v))
-                elif y + 2 * cube >= shape_y:
+                elif y + 2*cube + overlap >= shape_y:
                     v = volume[:, shape_y - self.input_dim: shape_y, x - overlap: x + overlap + cube][np.newaxis, ...]
                     seg.append(equal(v))
 
@@ -140,17 +141,18 @@ class EvalNet:
             else:
                 segments = np.concatenate((segments, pred), axis=0)
         i = 0
-        for y in range(overlap, shape_y - cube, cube):
-            for x in range(overlap, shape_x - cube, cube):
+        for y in range(overlap, shape_y - cube - overlap, cube):
+            for x in range(overlap, shape_x - cube - overlap, cube):
                 seg_res[overlap: self.input_dim - overlap, y: y + cube, x: x + cube] = segments[i]
                 i += 1
-                if x + 2 * cube >= shape_x and y + 2 * cube >= shape_y:
-                    seg_res[overlap: self.input_dim - overlap, shape_y - overlap - cube: shape_y - overlap, shape_x - cube - overlap: shape_x - overlap] = segments[i]
+                if x + 2 * cube + overlap >= shape_x and y + 2 * cube >= shape_y:
+                    seg_res[overlap: self.input_dim - overlap, shape_y - overlap - cube: shape_y - overlap,
+                            shape_x - cube - overlap: shape_x - overlap] = segments[i]
                     i += 1
-                elif x + 2 * cube >= shape_x:
+                elif x + 2 * cube + overlap >= shape_x:
                     seg_res[overlap: self.input_dim - overlap, y: y + cube, shape_x - cube - overlap: shape_x - overlap] = segments[i]
                     i += 1
-                elif y + 2 * cube >= shape_y:
+                elif y + 2 * cube + overlap >= shape_y:
                     seg_res[overlap: self.input_dim - overlap, shape_y - overlap - cube: shape_y - overlap, x: x + cube] = segments[i]
                     i += 1
         i = z
