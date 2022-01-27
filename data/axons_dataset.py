@@ -16,7 +16,7 @@ class AxonsDataset(data.Dataset):
         data_path = opt.dataroot
         n_samples = opt.n_samples
         input_dim = opt.input_dim
-        data_mix = opt.artifacts
+        data_mix = not opt.noartifacts
         self.unlabel = opt.semi
         self.flag = opt.isTrain
 

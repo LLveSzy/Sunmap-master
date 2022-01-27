@@ -121,13 +121,13 @@ class CustomDatasetDataLoader():
                 self.dataloader = torch.utils.data.DataLoader(
                     self.dataset,
                     batch_size=opt.batch_size,
-                    shuffle=opt.shuffle,
+                    shuffle=not opt.noshuffle_train,
                     num_workers=16)
         else:
             self.dataloader = torch.utils.data.DataLoader(
                 self.dataset,
                 batch_size=opt.batch_size,
-                shuffle=opt.shuffle_val,
+                shuffle=not opt.noshuffle_val,
                 num_workers=16)
 
     def load_data(self):
