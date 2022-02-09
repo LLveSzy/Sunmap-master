@@ -68,5 +68,16 @@ def contrast_augmentation(volume, label, rad=25, N=5, sigma=0.65):
         return volume
     return random_weaken_contrast(volume, mid, rad, sigma)
 
+
 def torch_fliplr(x):
     return torch.flipud(x.transpose(0,2)).transpose(0,2)
+
+
+def torch_dilation(tensor, iter):
+    tensor_ori = tensor.clone()
+    for _ in range(iter):
+        p1 = torch.nn.functional.max_pool3d(tensor, (3, 1, 1), 1, (1, 0, 0))
+        p2 = torch.nn.functional.max_pool3d(tensor, (1, 3, 1), 1, (0, 1, 0))
+        p3 = torch.nn.functional.max_pool3d(tensor, (1, 1, 3), 1, (0, 0, 1))
+        tensor = torch.max(torch.max(p1, p2), p3) - tensor_ori
+    return tensor

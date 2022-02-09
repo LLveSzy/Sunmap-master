@@ -24,14 +24,20 @@ class EvalNet:
     def eval_two_volumes_maxpool(self):
         pre = read_tiff_stack(self.opt.dataroot)
         label = read_tiff_stack(self.opt.data_target)
-        kernel = (self.opt.pool_kernel, self.opt.pool_kernel, self.opt.pool_kernel)
+        k = self.opt.pool_kernel
+        s = max(1, k - 1)
+        kernel = (k, k, k)
+        stride = (s, s, s)
         pre[pre < self.opt.threshold] = 0
         pre[pre >= self.opt.threshold] = 1
         label[label > 0] = 1
         pre = torch.Tensor(pre).view((1, 1, *pre.shape)).to(self.device)
+        # pre = torch_dilation(pre, 5)
         label = torch.Tensor(label).view((1, 1, *label.shape)).to(self.device)
-        pre = torch.nn.functional.max_pool3d(pre, kernel, kernel, 0)
-        label = torch.nn.functional.max_pool3d(label, kernel, kernel, 0)
+        # label = torch_dilation(label, 5)
+
+        pre = torch.nn.functional.max_pool3d(pre, kernel, 1, 0)
+        label = torch.nn.functional.max_pool3d(label, kernel, 1, 0)
 
         dice_score = dice_error(pre, label)
 
@@ -121,18 +127,18 @@ class EvalNet:
         seg = []
         overlap = self.overlap
         cube = self.cube
-        for y in range(overlap, shape_y - cube - overlap, cube):
-            for x in range(overlap, shape_x - cube - overlap, cube):
+        for y in range(overlap, shape_y - cube - overlap + 1, cube):
+            for x in range(overlap, shape_x - cube - overlap + 1, cube):
                 v = volume[:, y - overlap: y - overlap + self.input_dim, x - overlap: x - overlap + self.input_dim]
                 v = equal(v)
                 seg.append(v[np.newaxis, ...])
                 if x + 2 * cube + overlap >= shape_x and y + 2 * cube + overlap >= shape_y:
                     v = volume[:, shape_y - self.input_dim: shape_y, shape_x - self.input_dim: shape_x][np.newaxis, ...]
                     seg.append(equal(v))
-                elif x + 2 * cube + overlap >= shape_x:
+                if x + 2 * cube + overlap >= shape_x:
                     v = volume[:, y - overlap: y + overlap + cube, shape_x - self.input_dim: shape_x][np.newaxis, ...]
                     seg.append(equal(v))
-                elif y + 2 * cube + overlap >= shape_y:
+                if y + 2 * cube + overlap >= shape_y:
                     v = volume[:, shape_y - self.input_dim: shape_y, x - overlap: x + overlap + cube][np.newaxis, ...]
                     seg.append(equal(v))
 
@@ -148,18 +154,18 @@ class EvalNet:
             else:
                 segments = np.concatenate((segments, pred), axis=0)
         i = 0
-        for y in range(overlap, shape_y - cube - overlap, cube):
-            for x in range(overlap, shape_x - cube - overlap, cube):
+        for y in range(overlap, shape_y - cube - overlap + 1, cube):
+            for x in range(overlap, shape_x - cube - overlap + 1, cube):
                 seg_res[overlap: self.input_dim - overlap, y: y + cube, x: x + cube] = segments[i]
                 i += 1
                 if x + 2 * cube + overlap >= shape_x and y + 2 * cube + overlap >= shape_y:
                     seg_res[overlap: self.input_dim - overlap, shape_y - overlap - cube: shape_y - overlap,
                             shape_x - cube - overlap: shape_x - overlap] = segments[i]
                     i += 1
-                elif x + 2 * cube + overlap >= shape_x:
+                if x + 2 * cube + overlap >= shape_x:
                     seg_res[overlap: self.input_dim - overlap, y: y + cube, shape_x - cube - overlap: shape_x - overlap] = segments[i]
                     i += 1
-                elif y + 2 * cube + overlap >= shape_y:
+                if y + 2 * cube + overlap >= shape_y:
                     seg_res[overlap: self.input_dim - overlap, shape_y - overlap - cube: shape_y - overlap, x: x + cube] = segments[i]
                     i += 1
         i = z
