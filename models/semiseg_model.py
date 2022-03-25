@@ -30,17 +30,30 @@ class SemiSeg(BaseModel):
 
         if self.isTrain:
             self.criterion_BCE = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3.0]).to(self.device))  # define loss.
+            self.criterion = nn.CrossEntropyLoss(weight=torch.FloatTensor([1, 3]).to(self.device), ignore_index=255)
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=opt.lr, weight_decay=1e-4)
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'max',
                                                                         patience=20, factor=0.5, threshold=0.001)
 
     def backward(self, pre, ema_pre, label):
-        pre_soft = torch.sigmoid(pre)
-        ema_soft = torch.sigmoid(ema_pre)
-        supervised_loss = self.criterion_BCE(pre[:self.opt.labeled_bs], label[:self.opt.labeled_bs])  # + \
-        # 0.2 * (1 + soft_cldice_loss(torch.sigmoid(pre[:labeled_bs]), label[:labeled_bs]))
-        consistency_loss = torch.mean((pre_soft[self.opt.labeled_bs:] - ema_soft) ** 2)
-        self.loss = supervised_loss + 0.7 * consistency_loss #- 0.2 * (pre_soft * torch.log(pre_soft + 1e-9)).mean()
+        if self.opt.output_nc == 1:
+            pre_soft = torch.sigmoid(pre)
+            ema_soft = torch.sigmoid(ema_pre)
+            supervised_loss = self.criterion_BCE(pre[:self.opt.labeled_bs], label[:self.opt.labeled_bs])  # + \
+            # 0.2 * (1 + soft_cldice_loss(torch.sigmoid(pre[:labeled_bs]), label[:labeled_bs]))
+            consistency_loss = torch.mean((pre_soft[self.opt.labeled_bs:] - ema_soft) ** 2)
+            self.loss = supervised_loss + 0.7 * consistency_loss #- 0.2 * (pre_soft * torch.log(pre_soft + 1e-9)).mean()
+        else:
+            pre_soft = torch.softmax(pre, dim=1)
+            ema_soft = torch.softmax(ema_pre, dim=1)
+            ema_label = torch.argmax(ema_soft, dim=1)
+            ema_label[ema_label == 0] = 255
+            ema_label[torch.max(ema_soft, 1)[0] < 0.7] = 255
+
+            label[self.opt.labeled_bs:] = ema_label
+            supervised_loss = self.criterion(pre, label)
+            consistency_loss = torch.mean((pre_soft[self.opt.labeled_bs:] - ema_soft) ** 2)
+            self.loss = supervised_loss + 0.5 * consistency_loss - 0.1 * (pre_soft * torch.log(pre_soft + 1e-9)).mean()
         self.loss.backward()
 
     def forward(self, input):

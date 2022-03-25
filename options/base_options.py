@@ -22,12 +22,12 @@ class BaseOptions():
         parser.add_argument('--dataroot', type=str, default='', help='path to volumes (should have subfolders [volumes, labels, labels_sk, nonlabel(if using semi-supervising)]')
         parser.add_argument('-n', '--name', type=str, default='Sunmap', dest='name', help='name of model')
         parser.add_argument('-s', '--is_save', type=bool, default=True, dest='is_save', help='save checkpoints')
-        parser.add_argument('--gpu_ids', type=str, default='0', help='cuda number')
+        parser.add_argument('--gpu_ids', type=str, default=None, help='cuda number')
         parser.add_argument('--model', type=str, default='segnet', help='chooses which model to use. [segnet | semiseg | evalnet]')
         parser.add_argument('--input_dim', type=int, default=128, help='input dimension of model')
         parser.add_argument('--input_nc', type=int, default=1, help='input channel of model')
         parser.add_argument('--output_nc', type=int, default=1, help='output channel of model')
-        parser.add_argument('--dataset_mode', type=str, default='axons', help='axons|')
+        parser.add_argument('--dataset_mode', type=str, default='axons', help='axons|curaxons|augaxons')
 
         self.initialized = True
         return parser
@@ -93,14 +93,15 @@ class BaseOptions():
         self.print_options(opt)
 
         # set gpu ids
-        str_ids = opt.gpu_ids.split(',')
-        opt.gpu_ids = []
-        for str_id in str_ids:
-            id = int(str_id)
-            if id >= 0:
-                opt.gpu_ids.append(id)
-        if len(opt.gpu_ids) > 0:
-            torch.cuda.set_device(opt.gpu_ids[0])
+        if opt.gpu_ids:
+            str_ids = opt.gpu_ids.split(',')
+            opt.gpu_ids = []
+            for str_id in str_ids:
+                id = int(str_id)
+                if id >= 0:
+                    opt.gpu_ids.append(id)
+            if len(opt.gpu_ids) > 0:
+                torch.cuda.set_device(opt.gpu_ids[0])
 
         self.opt = opt
         return self.opt

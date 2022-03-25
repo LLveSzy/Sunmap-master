@@ -4,6 +4,9 @@ import torch
 import random
 import numpy as np
 from PIL import Image
+from imgaug import augmenters as iaa
+from imgaug.augmentables.segmaps import SegmentationMapsOnImage
+
 
 def equal(im, flg_max=1, flg_min=0):
     mi = im.min()
@@ -81,3 +84,60 @@ def torch_dilation(tensor, iter):
         p3 = torch.nn.functional.max_pool3d(tensor, (1, 1, 3), 1, (0, 0, 1))
         tensor = torch.max(torch.max(p1, p2), p3) - tensor_ori
     return tensor
+
+
+input_dim = 128
+class dataAugmentation():
+    def __init__(self):
+        import warnings
+        warnings.filterwarnings('ignore')
+        self.seq = iaa.Sequential([
+            iaa.Fliplr(0.5),
+            iaa.Flipud(0.5),
+            # iaa.contrast.SigmoidContrast((2.0, 5.0)),
+            iaa.Affine(
+                scale={"x": (1, 1.2), "y": (1, 1.2), "z": (1, 1.2)},
+                rotate=(-10, 10)
+            )
+        ])
+        self.crop = iaa.Lambda(
+            func_images=dataAugmentation.func_images,
+            func_keypoints=dataAugmentation.func_keypoints
+        )
+
+    def data_augmentation(self, volumes, labels=None):
+        if labels is not None:
+            segmap = SegmentationMapsOnImage(labels, shape=volumes.shape)
+            volume, label = self.seq(image=volumes, segmentation_maps=segmap)
+            label = label.get_arr()
+            label[label > 0] = 1
+            volume, label = self.crop.augment_images([volume, label])
+            volume = contrast_augmentation(volume, label, N=4)
+            return volume, label
+        else:
+            volume = self.seq(image=volumes)
+            volume = self.crop.augment_images(volume)
+            return volume
+
+    @staticmethod
+    def func_images(images, random_state, parents, hooks):
+        flg = len(images) == 2
+        if flg:
+            volume, label = images
+        else:
+            volume = images
+        z = random.randint(0, volume.shape[0] - input_dim)
+        x = random.randint(0, volume.shape[1] - input_dim)
+        y = random.randint(0, volume.shape[2] - input_dim)
+        volume = volume[z:z + input_dim, x:x + input_dim, y:y + input_dim].copy()
+        if flg:
+            label = label[z:z + input_dim, x:x + input_dim, y:y + input_dim].copy()
+            return [volume, label]
+        return volume
+
+    @staticmethod
+    def func_keypoints(keypoints_on_images, random_state, parents, hooks):
+        return keypoints_on_images
+
+
+

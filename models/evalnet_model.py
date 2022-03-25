@@ -25,9 +25,7 @@ class EvalNet:
         pre = read_tiff_stack(self.opt.dataroot)
         label = read_tiff_stack(self.opt.data_target)
         k = self.opt.pool_kernel
-        s = max(1, k - 1)
         kernel = (k, k, k)
-        stride = (s, s, s)
         pre[pre < self.opt.threshold] = 0
         pre[pre >= self.opt.threshold] = 1
         label[label > 0] = 1
@@ -36,8 +34,8 @@ class EvalNet:
         label = torch.Tensor(label).view((1, 1, *label.shape)).to(self.device)
         # label = torch_dilation(label, 5)
 
-        pre = torch.nn.functional.max_pool3d(pre, kernel, 1, 0)
-        label = torch.nn.functional.max_pool3d(label, kernel, 1, 0)
+        pre = torch.nn.functional.max_pool3d(pre, kernel, kernel, 0)
+        label = torch.nn.functional.max_pool3d(label, kernel, kernel, 0)
 
         dice_score = dice_error(pre, label)
 
@@ -130,8 +128,7 @@ class EvalNet:
         for y in range(overlap, shape_y - cube - overlap + 1, cube):
             for x in range(overlap, shape_x - cube - overlap + 1, cube):
                 v = volume[:, y - overlap: y - overlap + self.input_dim, x - overlap: x - overlap + self.input_dim]
-                v = equal(v)
-                seg.append(v[np.newaxis, ...])
+                seg.append(equal(v)[np.newaxis, ...])
                 if x + 2 * cube + overlap >= shape_x and y + 2 * cube + overlap >= shape_y:
                     v = volume[:, shape_y - self.input_dim: shape_y, shape_x - self.input_dim: shape_x][np.newaxis, ...]
                     seg.append(equal(v))
@@ -146,7 +143,11 @@ class EvalNet:
         segments = []
         for datas in seg_sets:
             pred = self.model(datas.to(self.device))
-            pred = torch.sigmoid(pred)
+            if self.opt.output_nc == 1:
+                pred = torch.sigmoid(pred)
+            else:
+                pred = torch.softmax(pred, dim=1)[:, 1, ...]
+
             pred = pred.reshape(-1, self.input_dim, self.input_dim, self.input_dim).detach().cpu().numpy()
             pred = pred[:, overlap: overlap + cube, overlap: overlap + cube, overlap: overlap + cube] * 255
             if len(segments) == 0:
@@ -187,17 +188,21 @@ class EvalNet:
             for batch, (data, label) in enumerate(testloader):
                 data = Variable(data.to(device))
                 label = Variable(label.clone().to(device))
-
                 with torch.no_grad():
                     pre = model(data)
-                    pre = torch.sigmoid(pre)
-                # tifffile.imsave(data_root +'/predict/' + str(batch) + '.tiff', pre.cpu().numpy()[0][0])
-                # tifffile.imsave(data_root + '/predict/' + str(batch) + '_label.tiff', label.cpu().numpy()[0][0])
-                # tifffile.imsave(data_root + '/predict/' + str(batch) + '_data.tiff', data.cpu().numpy()[0][0])
+                    if len(label.shape) == 4:
+                        pre = torch.argmax(torch.softmax(pre, dim=1), dim=1).unsqueeze(1).float()
+                        label = label[:, np.newaxis, ...].float()
+                    else:
+                        pre = torch.sigmoid(pre)
                 pre[pre > 0.5] = 1
                 pre[pre <= 0.5] = 0
-                label[label > 0.5] = 1
-                label[label <= 0.5] = 0
+                # label[label == 255] = 0
+                # label[label > 0.5] = 1
+                # label[label <= 0.5] = 0
+                tifffile.imsave('./predict/' + str(batch) + '.tiff', pre.cpu().numpy()[0][0])
+                tifffile.imsave('./predict/' + str(batch) + '_label.tiff', label.cpu().numpy()[0][0])
+                tifffile.imsave('./predict/' + str(batch) + '_data.tiff', data.cpu().numpy()[0][0])
 
                 total_loss_iou += iou(pre, label).cpu()
                 total_loss_tiou += t_iou(pre, label).cpu()

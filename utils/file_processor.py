@@ -21,3 +21,4 @@ def read_tiff_stack(path):
 def get_dir(path):
     tiffs = [join(path, f) for f in listdir(path) if f[0] != '.']
     return sorted(tiffs)
+

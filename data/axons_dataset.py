@@ -17,6 +17,7 @@ class AxonsDataset(data.Dataset):
         n_samples = opt.n_samples
         input_dim = opt.input_dim
         data_mix = not opt.noartifacts
+        self.opt = opt
         self.unlabel = opt.semi
         self.flag = opt.isTrain
 
@@ -25,7 +26,7 @@ class AxonsDataset(data.Dataset):
         self.labels_ori = []
 
         data_path = join(data_path, 'train') if self.flag else join(data_path, 'val')
-
+        self.data_path = data_path
         volumes_folder_path = join(data_path, "volumes")
         labels_folder_path = join(data_path, "labels_sk") if self.flag else join(data_path, 'labels')
 
@@ -74,40 +75,39 @@ class AxonsDataset(data.Dataset):
 
                     total_volumes += 1
                     pbar.update()
-            total_volumes_axon = total_volumes
-            if data_mix:
-                artifacts_folder_path = data_path + '/artifacts/'
-                artifacts_path = get_dir(artifacts_folder_path)
-                with tqdm(total=len(volumes_path) * n_samples, desc=f'artifacts numbers') as pbar:
-                    for apath in artifacts_path:
-                        ak_seed = random.randint(0, 3)
-                        artifact = read_tiff_stack(apath)
-                        if artifact.shape[0] < opt.input_dim or artifact.shape[1] < opt.input_dim \
-                                or artifact.shape[2] < opt.input_dim:
-                            print(artifact.shape)
-                            continue
-                        for _ in range(max(1, int(len(volumes_path) / len(artifacts_path) * n_samples))):
-                            z = random.randint(0, artifact.shape[0] - input_dim)
-                            x = random.randint(0, artifact.shape[1] - input_dim)
-                            y = random.randint(0, artifact.shape[2] - input_dim)
-                            artifact = artifact[z:z + input_dim, x:x + input_dim, y:y + input_dim]
-                            artifact = np.rot90(np.swapaxes(artifact, 0, 2), k=ak_seed).swapaxes(2, 0)
-                            # artifact = equal(artifact, 0.9)
-                            artifact = (artifact - artifact.min()) / (artifact.max() - artifact.min())
-                            data_ori = artifact.copy()[np.newaxis, :, :, :]
-                            if random.randint(0, 1) == 0:
-                                mix_seed = random.random() * 0.2 + 0.4  # from 0.4 to 0.6
-                                idx = random.randint(0, total_volumes_axon - 1)
-                                data_axon = self.datas[idx]
-                                data_ori = (data_ori * mix_seed + data_axon * (1 - mix_seed))
-                                annotation = self.labels[idx][0]
-                            else:
-                                annotation[annotation > 0] = 0
-                            self.datas.append(data_ori.astype(np.float32))
-                            self.labels.append(annotation[np.newaxis, ...].astype(np.float32))
+        if data_mix:
+            artifacts_folder_path = data_path + '/artifacts/'
+            artifacts_path = get_dir(artifacts_folder_path)
+            with tqdm(total=max(len(volumes_path) * n_samples, len(artifacts_path)), desc=f'artifacts numbers') as pbar:
+                for apath in artifacts_path:
+                    ak_seed = random.randint(0, 3)
+                    artifact = read_tiff_stack(apath)
+                    if artifact.shape[0] < opt.input_dim or artifact.shape[1] < opt.input_dim \
+                            or artifact.shape[2] < opt.input_dim:
+                        print(artifact.shape)
+                        continue
+                    for _ in range(max(1, int(len(volumes_path) / len(artifacts_path) * n_samples))):
+                        z = random.randint(0, artifact.shape[0] - input_dim)
+                        x = random.randint(0, artifact.shape[1] - input_dim)
+                        y = random.randint(0, artifact.shape[2] - input_dim)
+                        artifact = artifact[z:z + input_dim, x:x + input_dim, y:y + input_dim]
+                        artifact = np.rot90(np.swapaxes(artifact, 0, 2), k=ak_seed).swapaxes(2, 0)
+                        # artifact = equal(artifact, 0.9)
+                        artifact = (artifact - artifact.min()) / (artifact.max() - artifact.min())
+                        data_ori = artifact.copy()[np.newaxis, :, :, :]
+                        # if random.randint(0, 1) == 0:
+                        #     mix_seed = random.random() * 0.2 + 0.4  # from 0.4 to 0.6
+                        #     idx = random.randint(0, total_volumes - 1)
+                        #     data_axon = self.datas[idx]
+                        #     data_ori = (data_ori * mix_seed + data_axon * (1 - mix_seed))
+                        #     annotation = self.labels[idx][0]
+                        # else:
+                        annotation[annotation > 0] = 0
+                        self.datas.append(data_ori.astype(np.float32))
+                        self.labels.append(annotation[np.newaxis, ...].astype(np.float32))
 
-                            total_volumes += 1
-                            pbar.update()
+                        total_volumes += 1
+                        pbar.update()
 
         if self.unlabel and self.flag:
             self.labeled_num = total_volumes
@@ -139,12 +139,36 @@ class AxonsDataset(data.Dataset):
 
     def __getitem__(self, index):
         image = self.datas[index]
-        if self.flag and self.unlabel and index <= self.labeled_num and self.labels[index].sum() != 0:
-            reference = self.datas[random.randint(self.labeled_num, len(self) - 1)]
-            matched = match_histograms(image, reference)
-            return matched.astype(np.float32), self.labels[index]
+        label = self.labels[index]
+        if self.opt.output_nc != 1:
+            label = label[0].astype(np.long)
         else:
-            return image, self.labels[index]
+            label = label.astype(np.float32)
+        return image, label
+        # if self.flag and self.unlabel and index <= self.labeled_num and label.sum() != 0:
+        #     reference = self.datas[random.randint(self.labeled_num, len(self) - 1)]
+        #     matched = match_histograms(image, reference)
+        #
+        #     return matched.astype(np.float32), label
+        # else:
+        #     # label = self.labels[index]
+        #     # if label.sum() != 0:
+        #     #     label[label == 0] = 255
+        #     if self.opt.output_nc != 1:
+        #         label = label[0].astype(np.long)
+        #     else:
+        #         label = label.astype(np.float32)
+        #     return image, label
+
+        # if self.flag:
+        #     rt = join(self.data_path, 'nonlabel')
+        #     pths = os.listdir(rt)
+        #     reference = read_tiff_stack(join(rt, pths[random.randint(0, len(pths) - 1)]))
+        #     reference = ((reference - reference.min()) / (reference.max() - reference.min()))[np.newaxis, :, :, :]
+        #     matched = match_histograms(image, reference)
+        #     return matched.astype(np.float32), self.labels[index]
+        # else:
+        #     return image, self.labels[index]
 
     def __len__(self):
         return len(self.datas)
