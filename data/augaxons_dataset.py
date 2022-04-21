@@ -90,16 +90,31 @@ class AugAxonsDataset(data.Dataset):
     def __getitem__(self, index):
         volumes = self.datas[index]
         labels = self.labels[index]
-        data, label = self.augment.data_augmentation(volumes, labels)
-        if index < self.axon_nums and self.opt.isTrain:
-            reference = self.datas[random.randint(0, self.axon_nums-1)]
-            data = match_histograms(data, reference)
-        elif index >= self.axon_nums and self.opt.isTrain:
-            reference = self.datas[random.randint(self.axon_nums, len(self)-1)]
-            data = match_histograms(data, reference)
-        data = data[np.newaxis, ...].astype(np.float32)
 
-        data = (data - data.min()) / (data.max() - data.min())
+        # ------------------------------------------------------------------ #
+        # cutmix
+        if index < self.axon_nums:
+            artifact = self.datas[random.randint(self.axon_nums, len(self) - 1)]
+            z = random.randint(0, labels.shape[0])
+            x = random.randint(0, labels.shape[1])
+            y = random.randint(0, labels.shape[2])
+            artifact_chunk = artifact[:z, :x, :y].copy()
+            volumes[:z, :x, :y] = artifact_chunk
+            labels[:z, :x, :y] = np.zeros_like(artifact_chunk)
+
+        data, label = self.augment.data_augmentation(volumes, labels)
+        # ------------------------------------------------------------------ #
+        # histograms match
+        # if index < self.axon_nums and self.opt.isTrain:
+        #     reference = self.datas[random.randint(0, self.axon_nums-1)]
+        #     data = match_histograms(data, reference)
+        # elif index >= self.axon_nums and self.opt.isTrain:
+        #     reference = self.datas[random.randint(self.axon_nums, len(self)-1)]
+        #     data = match_histograms(data, reference)
+        # ------------------------------------------------------------------ #
+        data = data[np.newaxis, ...].astype(np.float32)
+        data = data / 6553
+        # data = (data - data.min()) / (data.max() - data.min())
         if self.opt.output_nc != 1:
             label = label.astype(np.long)
         else:

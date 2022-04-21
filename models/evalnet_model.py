@@ -128,16 +128,20 @@ class EvalNet:
         for y in range(overlap, shape_y - cube - overlap + 1, cube):
             for x in range(overlap, shape_x - cube - overlap + 1, cube):
                 v = volume[:, y - overlap: y - overlap + self.input_dim, x - overlap: x - overlap + self.input_dim]
-                seg.append(equal(v)[np.newaxis, ...])
+                seg.append(v[np.newaxis, ...] / 6553)
+                # seg.append(equal(v)[np.newaxis, ...])
                 if x + 2 * cube + overlap >= shape_x and y + 2 * cube + overlap >= shape_y:
                     v = volume[:, shape_y - self.input_dim: shape_y, shape_x - self.input_dim: shape_x][np.newaxis, ...]
-                    seg.append(equal(v))
+                    seg.append(v / 6553)
+                    # seg.append(equal(v))
                 if x + 2 * cube + overlap >= shape_x:
                     v = volume[:, y - overlap: y + overlap + cube, shape_x - self.input_dim: shape_x][np.newaxis, ...]
-                    seg.append(equal(v))
+                    seg.append(v / 6553)
+                    # seg.append(equal(v))
                 if y + 2 * cube + overlap >= shape_y:
                     v = volume[:, shape_y - self.input_dim: shape_y, x - overlap: x + overlap + cube][np.newaxis, ...]
-                    seg.append(equal(v))
+                    seg.append(v / 6553)
+                    # seg.append(equal(v))
 
         seg_sets = DataLoader(seg, batch_size=self.opt.batch_size, shuffle=False)
         segments = []

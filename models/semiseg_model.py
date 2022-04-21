@@ -48,12 +48,12 @@ class SemiSeg(BaseModel):
             ema_soft = torch.softmax(ema_pre, dim=1)
             ema_label = torch.argmax(ema_soft, dim=1)
             ema_label[ema_label == 0] = 255
-            ema_label[torch.max(ema_soft, 1)[0] < 0.7] = 255
+            ema_label[torch.max(ema_soft, 1)[0] < 0.85] = 255
 
             label[self.opt.labeled_bs:] = ema_label
             supervised_loss = self.criterion(pre, label)
             consistency_loss = torch.mean((pre_soft[self.opt.labeled_bs:] - ema_soft) ** 2)
-            self.loss = supervised_loss + 0.5 * consistency_loss - 0.1 * (pre_soft * torch.log(pre_soft + 1e-9)).mean()
+            self.loss = supervised_loss + 0.3 * consistency_loss# - 0.1 * (pre_soft * torch.log(pre_soft + 1e-9)).mean()
         self.loss.backward()
 
     def forward(self, input):
